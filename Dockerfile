@@ -1,6 +1,6 @@
 
 FROM golang:1.17.3-alpine3.14 as builder
-
+RUN apk --no-cache add ca-certificates
 RUN mkdir /build
 
 WORKDIR /build
@@ -14,7 +14,7 @@ FROM scratch
 
 
 WORKDIR /build
-
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /build/app .
 
 CMD ["/build/app" ]
