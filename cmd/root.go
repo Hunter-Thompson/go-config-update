@@ -291,7 +291,7 @@ func createPR(pr pullRequestOptions) (string, error) {
 	newPR := &github.NewPullRequest{
 		Title: &pr.commitMessage,
 		Head:  &pr.branchName,
-		Base:  &pr.branchName,
+		Base:  &pr.headBranchName,
 		Body:  &pr.pullRequestBody,
 	}
 
