@@ -45,8 +45,8 @@ var (
 	custom              bool
 	imagePrefix         string
 	configFolder        string
-	configName          string
-	viperSearch         string
+	configNames         []string
+	viperSearch         []string
 	configType          string
 	appendCommitMessage string
 	updateImage         bool
@@ -65,13 +65,11 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		vars := map[string]string{
 			"imageid":        imageID,
-			"repobame":       repoName,
+			"reponame":       repoName,
 			"repoclone":      repoToClone,
 			"imageprefix":    imagePrefix,
 			"configfolder":   configFolder,
-			"vipersearch":    viperSearch,
 			"configtype":     configType,
-			"configname":     configName,
 			"commitmessage":  appendCommitMessage,
 			"githuborg":      githubOrg,
 			"githubemail":    githubEmail,
@@ -83,6 +81,13 @@ var rootCmd = &cobra.Command{
 			if v == "" {
 				log.Fatal().Msgf("%s not set", k)
 			}
+		}
+
+		mustHaveValues(viperSearch, "vipersearch")
+		mustHaveValues(configNames, "confignames")
+
+		if len(configNames) != len(viperSearch) {
+			log.Fatal().Msgf("confignames, and vipersearch must have the same number of values")
 		}
 
 		if configType != "yaml" && configType != "json" {
@@ -107,9 +112,9 @@ func init() {
 	rootCmd.Flags().StringVar(&repoToClone, "repoclone", "", "Repo to clone")
 	rootCmd.Flags().StringVar(&imagePrefix, "imageprefix", "", "Image prefix")
 	rootCmd.Flags().StringVar(&configFolder, "configfolder", "", "Config folder")
-	rootCmd.Flags().StringVar(&viperSearch, "vipersearch", "", "Viper search keyword")
+	rootCmd.Flags().StringSliceVar(&viperSearch, "vipersearch", []string{}, "Viper search keywords")
 	rootCmd.Flags().StringVar(&configType, "configtype", "", "Config type - json/yaml")
-	rootCmd.Flags().StringVar(&configName, "configname", "", "Config name")
+	rootCmd.Flags().StringSliceVar(&configNames, "confignames", []string{}, "Config names")
 	rootCmd.Flags().StringVar(&appendCommitMessage, "commitmessage", "", "Commit message to append to feat(repo_name): ")
 
 	rootCmd.Flags().BoolVar(&updateImage, "updateimage", true, "Update image with image prefix and version")
@@ -148,36 +153,38 @@ func updateConfig() {
 		viper.Reset()
 		viper.SetKeysCaseSensitive(true)
 		viper.AddConfigPath(folder)
-		viper.SetConfigName(configName)
 		viper.SetConfigType(configType)
 
-		if err := viper.ReadInConfig(); err != nil {
-			log.Fatal().Err(err).Send()
-		}
-
-		i := viper.Get(viperSearch)
-
-		if updateImage {
-			if i == image {
-				log.Info().Msgf("image %s already set", image)
-				os.Exit(0)
+		for n, configName := range configNames {
+			viper.SetConfigName(configName)
+			if err := viper.ReadInConfig(); err != nil {
+				log.Fatal().Err(err).Send()
 			}
 
-			viper.Set(viperSearch, image)
-		}
+			i := viper.Get(viperSearch[n])
 
-		if updateVersion {
-			if i == imageID {
-				log.Info().Msgf("version %s already set", imageID)
-				os.Exit(0)
+			if updateImage {
+				if i == image {
+					log.Info().Msgf("image %s already set", image)
+					os.Exit(0)
+				}
+
+				viper.Set(viperSearch[n], image)
 			}
 
-			viper.Set(viperSearch, imageID)
-		}
+			if updateVersion {
+				if i == imageID {
+					log.Info().Msgf("version %s already set", imageID)
+					os.Exit(0)
+				}
 
-		err := viper.WriteConfig()
-		if err != nil {
-			log.Fatal().Err(err).Send()
+				viper.Set(viperSearch[n], imageID)
+			}
+
+			err := viper.WriteConfig()
+			if err != nil {
+				log.Fatal().Err(err).Send()
+			}
 		}
 	}
 
@@ -312,4 +319,10 @@ func createPR(pr pullRequestOptions) (string, error) {
 	}
 
 	return pullRequest.GetHTMLURL(), nil
+}
+
+func mustHaveValues(s []string, name string) {
+	if len(s) == 0 {
+		log.Fatal().Msgf("%s has no values", name)
+	}
 }

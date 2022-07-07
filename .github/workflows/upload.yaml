@@ -2,8 +2,9 @@ name: push-image
 
 on:
   push:
-    branches:
-      - 'master'
+    # Pattern matched against refs/tags
+    tags:        
+      - '*'           # Push events to every tag not containing /
 
 jobs:
   docker:
@@ -26,4 +27,4 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: user/app:latest
+          tags: hunterthompson/go-config-update:${{ github.ref_name }}
