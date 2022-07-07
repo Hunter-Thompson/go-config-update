@@ -10,10 +10,10 @@ $ ./go-config-update --imageid v0.0.1 \
                  --custom true \
                  --imageprefix 12837234.dkr.ecr.us-east-1.amazonaws.com \
                  --configfolder apps/test \
-                 --vipersearch config.image \
+                 --vipersearch "config.image,config.version" \
                  --githuborg test \
                  --configtype json \
-                 --configname test.json \
+                 --confignames "test.json,test2.json" \
                  --commitmessage helloworld \
                  --headbranchname master \
                  --githubusername test \
