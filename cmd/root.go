@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/Hunter-Thompson/viper"
@@ -38,6 +39,13 @@ type cloneOptions struct {
 	githubUsername string
 }
 
+type commentOptions struct {
+	gitRef    string
+	gitHubOrg string
+	appName   string
+	comment   string
+}
+
 var (
 	imageID             string
 	repoName            string
@@ -47,6 +55,7 @@ var (
 	configFolder        string
 	configNames         []string
 	viperSearch         []string
+	gitRef              string
 	configType          string
 	appendCommitMessage string
 	updateImage         bool
@@ -75,6 +84,7 @@ var rootCmd = &cobra.Command{
 			"githubemail":    githubEmail,
 			"githubusername": githubUsername,
 			"headbranchname": headBranchName,
+			"gitRef":         gitRef,
 		}
 
 		for k, v := range vars {
@@ -126,6 +136,7 @@ func init() {
 	rootCmd.Flags().StringVar(&githubEmail, "githubemail", "", "github email")
 	rootCmd.Flags().StringVar(&autoMergeLabel, "automergelabel", "", "label to add to the pr")
 	rootCmd.Flags().StringVar(&headBranchName, "headbranchname", "", "Branch to create a PR on")
+	rootCmd.Flags().StringVar(&gitRef, "gitRef", "", "git ref of image")
 
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
@@ -231,6 +242,19 @@ Link to changes if commit: https://github.com/%s/%s/commit/%s`, githubOrg, repoN
 	}
 
 	log.Info().Msgf("PR created: %s", pr)
+
+	log.Info().Msgf("creating comment on commit")
+
+	err = createComment(commentOptions{
+		appName:   repoName,
+		gitHubOrg: githubOrg,
+		gitRef:    gitRef,
+		comment:   pr,
+	})
+
+	if err != nil {
+		log.Fatal().Err(err).Send()
+	}
 }
 
 func cloneAndSet(r cloneOptions) (string, *git.Worktree, *git.Repository, *http.BasicAuth, error) {
@@ -319,6 +343,61 @@ func createPR(pr pullRequestOptions) (string, error) {
 	}
 
 	return pullRequest.GetHTMLURL(), nil
+}
+
+func createComment(co commentOptions) error {
+	ctx := context.Background()
+
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: os.Getenv("GIT_TOKEN")},
+	)
+
+	tc := oauth2.NewClient(ctx, ts)
+
+	comment := &github.RepositoryComment{
+		Body: github.String(co.comment),
+	}
+
+	githubClient := github.NewClient(tc)
+
+	r, _ := regexp.Compile(`\b[0-9a-f]{5,40}\b`)
+	commit := ""
+
+	if r.MatchString(co.gitRef) {
+		log.Info().Msgf("matched commit regex, commit: %s", co.gitRef)
+		commit = co.gitRef
+	} else {
+		log.Info().Msgf("didnt matched commit regex, commit: %s", co.gitRef)
+		opt := &github.ListOptions{
+			PerPage: 10,
+		}
+
+		var allTags []*github.RepositoryTag
+		for {
+			tags, resp, err := githubClient.Repositories.ListTags(ctx, co.gitHubOrg, co.appName, opt)
+			if err != nil {
+				return err
+			}
+			allTags = append(allTags, tags...)
+			if resp.NextPage == 0 {
+				break
+			}
+			opt.Page = resp.NextPage
+		}
+
+		for _, tag := range allTags {
+			if tag.GetName() == co.gitRef {
+				commit = tag.GetCommit().GetSHA()
+			}
+		}
+	}
+
+	_, _, err := githubClient.Repositories.CreateComment(ctx, co.gitHubOrg, co.appName, commit, comment)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func mustHaveValues(s []string, name string) {
