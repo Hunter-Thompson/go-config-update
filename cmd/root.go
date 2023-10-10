@@ -7,6 +7,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"regexp"
 	"time"
@@ -52,6 +53,7 @@ var (
 	repoToClone         string
 	custom              bool
 	imagePrefix         string
+	imageInt            int
 	configFolder        string
 	configNames         []string
 	viperSearch         []string
@@ -60,6 +62,7 @@ var (
 	appendCommitMessage string
 	updateImage         bool
 	updateVersion       bool
+	updateInt           bool
 	githubOrg           string
 	githubUsername      string
 	githubEmail         string
@@ -74,7 +77,6 @@ var rootCmd = &cobra.Command{
 	Short: "Updates a JSON/YAML config with a new version and creates a pull request",
 	Run: func(cmd *cobra.Command, args []string) {
 		vars := map[string]string{
-			"imageid":        imageID,
 			"reponame":       repoName,
 			"repoclone":      repoToClone,
 			"imageprefix":    imagePrefix,
@@ -85,7 +87,6 @@ var rootCmd = &cobra.Command{
 			"githubemail":    githubEmail,
 			"githubusername": githubUsername,
 			"headbranchname": headBranchName,
-			"gitRef":         gitRef,
 		}
 
 		for k, v := range vars {
@@ -119,6 +120,7 @@ func Execute() {
 
 func init() {
 	rootCmd.Flags().StringVar(&imageID, "imageid", "", "Image ID to use")
+	rootCmd.Flags().IntVar(&imageInt, "imageint", 0, "image int to use")
 	rootCmd.Flags().StringVar(&repoName, "reponame", "", "Repo of image")
 	rootCmd.Flags().StringVar(&repoToClone, "repoclone", "", "Repo to clone")
 	rootCmd.Flags().StringVar(&imagePrefix, "imageprefix", "", "Image prefix")
@@ -131,6 +133,7 @@ func init() {
 
 	rootCmd.Flags().BoolVar(&updateImage, "updateimage", true, "Update image with image prefix and version")
 	rootCmd.Flags().BoolVar(&updateVersion, "updateversion", false, "Update version only")
+	rootCmd.Flags().BoolVar(&updateInt, "updateint", false, "Update int")
 	rootCmd.Flags().BoolVar(&custom, "custom", false, "Custom image")
 
 	rootCmd.Flags().StringVar(&githubOrg, "githuborg", "", "github organization")
@@ -144,7 +147,7 @@ func init() {
 }
 
 func updateConfig() {
-	branch := fmt.Sprintf("refs/heads/%s-%s", repoName, imageID)
+	branch := fmt.Sprintf("refs/heads/%s-%s-%s", repoName, imageID, String(4))
 	repoURI := fmt.Sprintf("https://github.com/%s/%s.git", githubOrg, repoToClone)
 
 	tempFolder, workTree, clone, auth, err := cloneAndSet(cloneOptions{
@@ -192,6 +195,15 @@ func updateConfig() {
 				}
 
 				viper.Set(viperSearch[n], imageID)
+			}
+
+			if updateInt {
+				if i == imageInt {
+					log.Info().Msgf("int %d already set", imageInt)
+					os.Exit(0)
+				}
+
+				viper.Set(viperSearch[n], imageInt)
 			}
 
 			err := viper.WriteConfig()
@@ -410,4 +422,22 @@ func mustHaveValues(s []string, name string) {
 	if len(s) == 0 {
 		log.Fatal().Msgf("%s has no values", name)
 	}
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz" +
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var seededRand *rand.Rand = rand.New(
+	rand.NewSource(time.Now().UnixNano()))
+
+func String(length int) string {
+	return StringWithCharset(length, charset)
+}
+
+func StringWithCharset(length int, charset string) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
 }
