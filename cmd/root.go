@@ -63,6 +63,7 @@ var (
 	githubOrg           string
 	githubUsername      string
 	githubEmail         string
+	skipCreateComment   bool
 	autoMergeLabel      string
 	headBranchName      string
 )
@@ -122,6 +123,7 @@ func init() {
 	rootCmd.Flags().StringVar(&repoToClone, "repoclone", "", "Repo to clone")
 	rootCmd.Flags().StringVar(&imagePrefix, "imageprefix", "", "Image prefix")
 	rootCmd.Flags().StringVar(&configFolder, "configfolder", "", "Config folder")
+	rootCmd.Flags().BoolVar(&skipCreateComment, "skipcomment", false, "Skip creating a comment")
 	rootCmd.Flags().StringSliceVar(&viperSearch, "vipersearch", []string{}, "Viper search keywords")
 	rootCmd.Flags().StringVar(&configType, "configtype", "", "Config type - json/yaml")
 	rootCmd.Flags().StringSliceVar(&configNames, "confignames", []string{}, "Config names")
@@ -242,6 +244,10 @@ Link to changes if commit: https://github.com/%s/%s/commit/%s`, githubOrg, repoN
 	}
 
 	log.Info().Msgf("PR created: %s", pr)
+
+	if skipCreateComment {
+		os.Exit(0)
+	}
 
 	log.Info().Msgf("creating comment on commit")
 
